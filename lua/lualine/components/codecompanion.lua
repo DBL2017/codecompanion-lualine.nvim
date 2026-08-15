@@ -79,6 +79,16 @@ function M:init(options)
         CodeCompanionChatStopped = true,
         CodeCompanionChatCleared = true,
     }
+    local is_close = {
+        CodeCompanionChatClosed = true,
+        CodeCompanionCLIClosed = true,
+    }
+    local is_open = {
+        CodeCompanionChatCreated = true,
+        CodeCompanionChatOpened = true,
+        CodeCompanionCLICreated = true,
+        CodeCompanionCLIOpened = true,
+    }
 
     vim.api.nvim_create_autocmd("User", {
         pattern = "CodeCompanion*",
@@ -113,6 +123,12 @@ function M:init(options)
                 end
                 return
             end
+            if is_close[event] then
+                self.is_close = true
+                return
+            elseif is_open[event] then
+                self.is_close = false
+            end
 
             if text then
                 if model_name ~= "" then
@@ -127,6 +143,9 @@ end
 
 function M:update_status()
     if not package.loaded["codecompanion"] then
+        return nil
+    end
+    if self.is_close then
         return nil
     end
 
