@@ -154,7 +154,9 @@ function M:init(options)
             -- 创建或获取请求对象
             local req = self.requests[bufnr]
             if not req then
-                req = {}
+                req = {
+                    bufnr = bufnr,
+                }
                 self.requests[bufnr] = req
             end
 
@@ -184,10 +186,11 @@ function M:update_status()
         return nil
     end
 
-    local name = vim.api.nvim_buf_get_name(bufnr)
-    if not name:match("CodeCompanion") then
-        return nil
-    end
+    -- 当启用codecompanion-history auto_generate_title时这里会失效
+    -- local name = vim.api.nvim_buf_get_name(bufnr)
+    -- if not name:match("CodeCompanion") then
+    --     return nil
+    -- end
 
     local req = self.requests[bufnr]
     if not req then
