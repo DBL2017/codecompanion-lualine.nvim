@@ -75,6 +75,10 @@ local function format_duration(seconds)
     return string.format("[%ds]", secs)
 end
 
+local function calculate_elapsed(start_time)
+    return math.floor((vim.loop.now() - start_time) / 1000)
+end
+
 function M:init(options)
     M.super.init(self, options)
 
@@ -82,25 +86,26 @@ function M:init(options)
     self._last_update = 0
     self._cached_status = nil
 
-    -- 耗时计算公共函数
-    local function calculate_elapsed(req)
-        if req.start_time then
-            req.elapsed = math.floor((vim.loop.now() - req.start_time) / 1000)
-        end
-    end
-
-    -- 启动事件公共函数
-    local function handle_start(req, data, text)
+    local function handle_request_start(req, data, text)
         req.id = data and data.id
         req.status = "running"
-        req.start_time = vim.loop.now()
-        req.elapsed = nil
         req.status_text = text or ""
     end
 
-    -- 完成/停止事件公共函数
-    local function handle_finish(req, status)
-        calculate_elapsed(req)
+    local function handle_round_start(req)
+        if req.round_start_time then
+            return
+        end
+
+        req.round_start_time = vim.loop.now()
+        req.round_elapsed = nil
+    end
+
+    local function handle_round_finish(req, status)
+        if req.round_start_time then
+            req.round_elapsed = calculate_elapsed(req.round_start_time)
+            req.round_start_time = nil
+        end
         req.status = status
     end
 
@@ -121,23 +126,20 @@ function M:init(options)
         end,
 
         -- 请求启动事件
-        CodeCompanionRequestStarted = handle_start,
-        CodeCompanionChatSubmitted = handle_start,
+        CodeCompanionRequestStarted = handle_request_start,
+        CodeCompanionChatSubmitted = handle_round_start,
 
         -- 请求完成事件
-        CodeCompanionRequestFinished = function(req)
-            handle_finish(req, "finished")
-        end,
         CodeCompanionChatDone = function(req)
-            handle_finish(req, "finished")
+            handle_round_finish(req, "finished")
         end,
 
         -- 停止/清除事件
         CodeCompanionChatStopped = function(req)
-            handle_finish(req, "stopped")
+            handle_round_finish(req, "stopped")
         end,
         CodeCompanionChatCleared = function(req)
-            handle_finish(req, "stopped")
+            handle_round_finish(req, "stopped")
         end,
     }
 
@@ -205,12 +207,14 @@ function M:update_status()
 
     self._last_update = now
 
-    local duration = ""
-    if req.status == "running" and req.start_time then
-        duration = format_duration(math.floor((vim.loop.now() - req.start_time) / 1000))
-    elseif req.elapsed then
-        duration = format_duration(req.elapsed)
+    local round_duration
+    if req.round_start_time then
+        round_duration = format_duration(calculate_elapsed(req.round_start_time))
+    elseif req.round_elapsed then
+        round_duration = format_duration(req.round_elapsed)
     end
+
+    local duration = round_duration or ""
 
     local icon = DEFAULT_OPTIONS.icon or ""
     local model_name = req.model_name or "default"
